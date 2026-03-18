@@ -1707,3 +1707,710 @@ function gameLoop(timestamp) {
     };
 })();
 </script>
+
+<script>
+// ======================== BUFFER WAVES — Part 3: Shop, Editor, Import, Init ========================
+
+// ===== SHOP RENDERING =====
+function renderShop() {
+    const skinGrid = document.getElementById('skinGrid');
+    const trailGrid = document.getElementById('trailGrid');
+    skinGrid.innerHTML = '';
+    trailGrid.innerHTML = '';
+
+    SKINS.forEach(sk => {
+        const owned = save.unlockedSkins.includes(sk.id);
+        const equipped = save.equippedSkin === sk.id;
+        const div = document.createElement('div');
+        div.className = 'shop-item' + (owned ? ' owned' : '') + (equipped ? ' equipped' : '');
+        
+        // Preview canvas
+        const prev = document.createElement('canvas');
+        prev.width = 40; prev.height = 40;
+        prev.className = 'shop-preview';
+        const pc = prev.getContext('2d');
+        pc.translate(20, 20);
+        pc.fillStyle = sk.color;
+        pc.strokeStyle = '#fff';
+        pc.lineWidth = 1;
+        drawSkinPreview(pc, sk.shape, 12);
+        
+        div.appendChild(prev);
+        div.innerHTML += `<div class="item-name">${sk.name}</div>`;
+        if (!owned) {
+            div.innerHTML += `<div class="item-price">⬥ ${sk.price}</div>`;
+        } else if (equipped) {
+            div.innerHTML += `<div class="item-status">EQUIPPED</div>`;
+        } else {
+            div.innerHTML += `<div class="item-status" style="color:#aaa;">Owned</div>`;
+        }
+        
+        div.onclick = () => {
+            if (!owned) {
+                if (save.coins >= sk.price) {
+                    save.coins -= sk.price;
+                    save.unlockedSkins.push(sk.id);
+                    save.equippedSkin = sk.id;
+                    saveToDisk();
+                    renderShop();
+                    updateCoinsDisplay();
+                    showToast('Unlocked ' + sk.name + '!');
+                } else {
+                    showToast('Not enough coins!');
+                }
+            } else {
+                save.equippedSkin = sk.id;
+                saveToDisk();
+                renderShop();
+                showToast('Equipped ' + sk.name);
+            }
+        };
+        skinGrid.appendChild(div);
+    });
+
+    // Custom skin
+    if (save.unlockedSkins.includes('custom')) {
+        const div = document.createElement('div');
+        const equipped = save.equippedSkin === 'custom';
+        div.className = 'shop-item owned' + (equipped ? ' equipped' : '');
+        div.innerHTML = `<div class="shop-preview" style="background:url(${save.customImages['skin_custom'] || ''});background-size:cover;border-radius:6px;"></div>
+            <div class="item-name">Custom</div>
+            <div class="item-status">${equipped ? 'EQUIPPED' : 'Owned'}</div>`;
+        div.onclick = () => { save.equippedSkin = 'custom'; saveToDisk(); renderShop(); showToast('Equipped Custom Skin'); };
+        skinGrid.appendChild(div);
+    }
+
+    TRAILS.forEach(tr => {
+        const owned = save.unlockedTrails.includes(tr.id);
+        const equipped = save.equippedTrail === tr.id;
+        const div = document.createElement('div');
+        div.className = 'shop-item' + (owned ? ' owned' : '') + (equipped ? ' equipped' : '');
+
+        const prev = document.createElement('canvas');
+        prev.width = 40; prev.height = 40;
+        prev.className = 'shop-preview';
+        const pc = prev.getContext('2d');
+        drawTrailPreview(pc, tr, 40);
+
+        div.appendChild(prev);
+        div.innerHTML += `<div class="item-name">${tr.name}</div>`;
+        if (!owned) {
+            div.innerHTML += `<div class="item-price">⬥ ${tr.price}</div>`;
+        } else if (equipped) {
+            div.innerHTML += `<div class="item-status">EQUIPPED</div>`;
+        } else {
+            div.innerHTML += `<div class="item-status" style="color:#aaa;">Owned</div>`;
+        }
+
+        div.onclick = () => {
+            if (!owned) {
+                if (save.coins >= tr.price) {
+                    save.coins -= tr.price;
+                    save.unlockedTrails.push(tr.id);
+                    save.equippedTrail = tr.id;
+                    saveToDisk();
+                    renderShop();
+                    updateCoinsDisplay();
+                    showToast('Unlocked ' + tr.name + '!');
+                } else {
+                    showToast('Not enough coins!');
+                }
+            } else {
+                save.equippedTrail = tr.id;
+                saveToDisk();
+                renderShop();
+                showToast('Equipped ' + tr.name);
+            }
+        };
+        trailGrid.appendChild(div);
+    });
+
+    // Custom trail
+    if (save.unlockedTrails.includes('custom')) {
+        const div = document.createElement('div');
+        const equipped = save.equippedTrail === 'custom';
+        div.className = 'shop-item owned' + (equipped ? ' equipped' : '');
+        div.innerHTML = `<div class="shop-preview" style="background:url(${save.customImages['trail_custom'] || ''});background-size:cover;border-radius:6px;"></div>
+            <div class="item-name">Custom</div>
+            <div class="item-status">${equipped ? 'EQUIPPED' : 'Owned'}</div>`;
+        div.onclick = () => { save.equippedTrail = 'custom'; saveToDisk(); renderShop(); showToast('Equipped Custom Trail'); };
+        trailGrid.appendChild(div);
+    }
+}
+
+function drawSkinPreview(c, shape, s) {
+    c.beginPath();
+    if (shape === 'diamond') {
+        c.moveTo(0, -s); c.lineTo(s, 0); c.lineTo(0, s); c.lineTo(-s, 0);
+        c.closePath(); c.fill(); c.stroke();
+    } else if (shape === 'arrow') {
+        c.moveTo(s, 0); c.lineTo(-s, -s); c.lineTo(-s*0.3, 0); c.lineTo(-s, s);
+        c.closePath(); c.fill(); c.stroke();
+    } else if (shape === 'star') {
+        for (let i = 0; i < 5; i++) {
+            const a = (i * 72 - 90) * Math.PI / 180;
+            c[i===0?'moveTo':'lineTo'](Math.cos(a)*s, Math.sin(a)*s);
+            const a2 = ((i*72)+36-90)*Math.PI/180;
+            c.lineTo(Math.cos(a2)*s*0.45, Math.sin(a2)*s*0.45);
+        }
+        c.closePath(); c.fill(); c.stroke();
+    } else if (shape === 'circle') {
+        c.arc(0, 0, s, 0, Math.PI*2); c.fill(); c.stroke();
+    } else if (shape === 'square') {
+        c.fillRect(-s, -s, s*2, s*2); c.strokeRect(-s, -s, s*2, s*2);
+    } else if (shape === 'dart') {
+        c.moveTo(s*1.2, 0); c.lineTo(-s*0.5, -s*0.9); c.lineTo(-s*0.2, 0); c.lineTo(-s*0.5, s*0.9);
+        c.closePath(); c.fill(); c.stroke();
+    } else if (shape === 'crescent') {
+        c.arc(0, 0, s, 0, Math.PI*2); c.fill();
+        c.fillStyle = '#1a1a2e';
+        c.beginPath(); c.arc(s*0.35, -s*0.15, s*0.7, 0, Math.PI*2); c.fill();
+    } else if (shape === 'bolt') {
+        c.moveTo(s*0.2,-s); c.lineTo(-s*0.6,s*0.1); c.lineTo(-s*0.1,s*0.1);
+        c.lineTo(-s*0.3,s); c.lineTo(s*0.7,-s*0.1); c.lineTo(s*0.15,-s*0.1);
+        c.closePath(); c.fill(); c.stroke();
+    }
+}
+
+function drawTrailPreview(c, tr, size) {
+    for (let i = 0; i < size; i++) {
+        const t = i / size;
+        c.globalAlpha = t * 0.8;
+        let col = tr.color;
+        if (tr.style === 'rainbow') col = `hsl(${(i*12)%360},100%,60%)`;
+        else if (tr.style === 'fire') col = `rgb(255,${Math.floor(100*(1-t))},0)`;
+        c.fillStyle = col;
+        if (tr.style === 'dotted' && i % 4 !== 0) continue;
+        c.fillRect(i, size/2 - 3*t - 1, 2, 3*t + 2);
+    }
+    c.globalAlpha = 1;
+}
+
+// ===== IMAGE IMPORT =====
+let importType = 'skin';
+function importImage(type) {
+    importType = type;
+    document.getElementById('imageInput').click();
+}
+
+document.getElementById('imageInput').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        const dataURL = ev.target.result;
+        
+        // Resize to reasonable size
+        const img = new Image();
+        img.onload = function() {
+            const maxSize = 64;
+            const c2 = document.createElement('canvas');
+            let w = img.width, h = img.height;
+            if (w > maxSize || h > maxSize) {
+                const ratio = Math.min(maxSize/w, maxSize/h);
+                w *= ratio; h *= ratio;
+            }
+            c2.width = w; c2.height = h;
+            const cx = c2.getContext('2d');
+            cx.drawImage(img, 0, 0, w, h);
+            const resized = c2.toDataURL('image/png', 0.8);
+            
+            if (importType === 'skin') {
+                save.customImages['skin_custom'] = resized;
+                if (!save.unlockedSkins.includes('custom')) save.unlockedSkins.push('custom');
+                save.equippedSkin = 'custom';
+                customSkinLoaded = false;
+                customSkinImg = null;
+                loadCustomSkinImage();
+                showToast('Custom skin imported!');
+            } else {
+                save.customImages['trail_custom'] = resized;
+                if (!save.unlockedTrails.includes('custom')) save.unlockedTrails.push('custom');
+                save.equippedTrail = 'custom';
+                showToast('Custom trail imported!');
+            }
+            saveToDisk();
+            renderShop();
+        };
+        img.src = dataURL;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+});
+
+// ===== LEVEL EDITOR =====
+let editorLevel = null;
+let editorIndex = -1;
+let editorTool = 'block';
+let editorScrollX = 0;
+let editorCanvas, editorCtx;
+let editorCellSize = 30;
+let editorLongPress = null;
+
+const EDITOR_TOOLS = [
+    { id: 'block', label: '■', color: '#00f0ff', title: 'Block' },
+    { id: 'spike_up', label: '▲', color: '#ff3a5c', title: 'Spike Up' },
+    { id: 'spike_down', label: '▼', color: '#ff3a5c', title: 'Spike Down' },
+    { id: 'spike_left', label: '◄', color: '#ff3a5c', title: 'Spike Left' },
+    { id: 'spike_right', label: '►', color: '#ff3a5c', title: 'Spike Right' },
+    { id: 'erase', label: '✕', color: '#888', title: 'Eraser' }
+];
+
+function renderEditorList() {
+    const list = document.getElementById('editorLevelList');
+    list.innerHTML = '';
+    save.customLevels.forEach((lvl, i) => {
+        const card = document.createElement('div');
+        card.className = 'level-card';
+        card.innerHTML = `<div class="lv-name" style="color:#ff00e6">${lvl.name}</div>
+            <div class="lv-diff">${lvl.gridW} blocks wide</div>`;
+        card.onclick = () => openEditor(i);
+        list.appendChild(card);
+    });
+    if (save.customLevels.length === 0) {
+        list.innerHTML = '<p style="color:#666;font-size:0.85em;text-align:center;grid-column:1/-1;">No custom levels yet. Create one!</p>';
+    }
+}
+
+function newEditorLevel() {
+    document.getElementById('levelNameInput').value = '';
+    document.getElementById('nameModal').classList.add('active');
+}
+
+function confirmLevelName() {
+    const name = document.getElementById('levelNameInput').value.trim();
+    if (!name) { showToast('Enter a name!'); return; }
+    closeModal('nameModal');
+    
+    const lvl = {
+        name: name,
+        gridW: 40,
+        gridH: 12,
+        color: '#ff00e6',
+        blocks: []
+    };
+    
+    // Add floor and ceiling
+    for (let x = 0; x < lvl.gridW; x++) {
+        lvl.blocks.push({x:x, y:0, w:1, h:1, type:'block'});
+        lvl.blocks.push({x:x, y:lvl.gridH-1, w:1, h:1, type:'block'});
+    }
+    
+    save.customLevels.push(lvl);
+    saveToDisk();
+    openEditor(save.customLevels.length - 1);
+}
+
+function openEditor(index) {
+    editorIndex = index;
+    editorLevel = JSON.parse(JSON.stringify(save.customLevels[index]));
+    editorScrollX = 0;
+    editorTool = 'block';
+    
+    document.getElementById('editorTitle').textContent = 'Editing: ' + editorLevel.name;
+    showScreen('editorScreen');
+    
+    setupEditorCanvas();
+    renderEditorToolbar();
+    drawEditor();
+}
+
+function setupEditorCanvas() {
+    editorCanvas = document.getElementById('editorCanvas');
+    editorCtx = editorCanvas.getContext('2d');
+    
+    const panel = editorCanvas.parentElement;
+    const availW = panel.clientWidth - 40;
+    editorCellSize = Math.max(16, Math.min(36, Math.floor(availW / 20)));
+    
+    editorCanvas.width = availW;
+    editorCanvas.height = editorLevel.gridH * editorCellSize;
+    
+    // Mouse events
+    editorCanvas.onmousedown = editorMouseDown;
+    editorCanvas.onmousemove = editorMouseMove;
+    editorCanvas.oncontextmenu = e => e.preventDefault();
+    
+    // Touch events
+    editorCanvas.ontouchstart = editorTouchStart;
+    editorCanvas.ontouchmove = editorTouchMove;
+    editorCanvas.ontouchend = editorTouchEnd;
+}
+
+function renderEditorToolbar() {
+    const tb = document.getElementById('editorToolbar');
+    tb.innerHTML = '';
+    EDITOR_TOOLS.forEach(t => {
+        const btn = document.createElement('div');
+        btn.className = 'editor-tool' + (editorTool === t.id ? ' active' : '');
+        btn.textContent = t.label;
+        btn.style.color = t.color;
+        btn.title = t.title;
+        btn.onclick = () => { editorTool = t.id; renderEditorToolbar(); };
+        tb.appendChild(btn);
+    });
+    
+    document.getElementById('editorInfo').textContent = 
+        `Tool: ${EDITOR_TOOLS.find(t=>t.id===editorTool).title} | Size: ${editorLevel.gridW}×${editorLevel.gridH} | Scroll: ${editorScrollX}`;
+}
+
+function editorMouseDown(e) {
+    const rect = editorCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const gx = Math.floor(mx / editorCellSize) + editorScrollX;
+    const gy = Math.floor(my / editorCellSize);
+    
+    if (e.button === 2) {
+        editorErase(gx, gy);
+    } else {
+        editorPlace(gx, gy);
+    }
+    drawEditor();
+}
+
+function editorMouseMove(e) {
+    if (e.buttons === 1) {
+        const rect = editorCanvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const gx = Math.floor(mx / editorCellSize) + editorScrollX;
+        const gy = Math.floor(my / editorCellSize);
+        editorPlace(gx, gy);
+        drawEditor();
+    } else if (e.buttons === 2) {
+        const rect = editorCanvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const gx = Math.floor(mx / editorCellSize) + editorScrollX;
+        const gy = Math.floor(my / editorCellSize);
+        editorErase(gx, gy);
+        drawEditor();
+    }
+}
+
+function editorTouchStart(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = editorCanvas.getBoundingClientRect();
+    const mx = touch.clientX - rect.left;
+    const my = touch.clientY - rect.top;
+    const gx = Math.floor(mx / editorCellSize) + editorScrollX;
+    const gy = Math.floor(my / editorCellSize);
+    
+    // Long press detection for erasing
+    editorLongPress = setTimeout(() => {
+        editorErase(gx, gy);
+        drawEditor();
+        editorLongPress = 'erasing';
+    }, 400);
+    
+    editorPlace(gx, gy);
+    drawEditor();
+}
+
+function editorTouchMove(e) {
+    e.preventDefault();
+    if (editorLongPress === 'erasing') {
+        const touch = e.touches[0];
+        const rect = editorCanvas.getBoundingClientRect();
+        const mx = touch.clientX - rect.left;
+        const my = touch.clientY - rect.top;
+        const gx = Math.floor(mx / editorCellSize) + editorScrollX;
+        const gy = Math.floor(my / editorCellSize);
+        editorErase(gx, gy);
+        drawEditor();
+    } else {
+        clearTimeout(editorLongPress);
+        const touch = e.touches[0];
+        const rect = editorCanvas.getBoundingClientRect();
+        const mx = touch.clientX - rect.left;
+        const my = touch.clientY - rect.top;
+        const gx = Math.floor(mx / editorCellSize) + editorScrollX;
+        const gy = Math.floor(my / editorCellSize);
+        editorPlace(gx, gy);
+        drawEditor();
+    }
+}
+
+function editorTouchEnd(e) {
+    if (editorLongPress !== 'erasing') clearTimeout(editorLongPress);
+    editorLongPress = null;
+}
+
+function editorPlace(gx, gy) {
+    if (gx < 0 || gx >= editorLevel.gridW || gy < 0 || gy >= editorLevel.gridH) return;
+    if (editorTool === 'erase') { editorErase(gx, gy); return; }
+    
+    // Don't place on existing block at same pos
+    const existing = editorLevel.blocks.findIndex(b => b.x === gx && b.y === gy);
+    if (existing >= 0) {
+        editorLevel.blocks[existing].type = editorTool;
+    } else {
+        editorLevel.blocks.push({x: gx, y: gy, w: 1, h: 1, type: editorTool});
+    }
+}
+
+function editorErase(gx, gy) {
+    editorLevel.blocks = editorLevel.blocks.filter(b => !(b.x === gx && b.y === gy));
+}
+
+function drawEditor() {
+    if (!editorCtx) return;
+    const c = editorCtx;
+    const cs = editorCellSize;
+    const viewCols = Math.ceil(editorCanvas.width / cs);
+    
+    c.fillStyle = '#0a0a1a';
+    c.fillRect(0, 0, editorCanvas.width, editorCanvas.height);
+    
+    // Grid lines
+    c.strokeStyle = 'rgba(255,255,255,0.07)';
+    c.lineWidth = 1;
+    for (let x = 0; x <= viewCols; x++) {
+        c.beginPath();
+        c.moveTo(x * cs, 0);
+        c.lineTo(x * cs, editorCanvas.height);
+        c.stroke();
+    }
+    for (let y = 0; y <= editorLevel.gridH; y++) {
+        c.beginPath();
+        c.moveTo(0, y * cs);
+        c.lineTo(editorCanvas.width, y * cs);
+        c.stroke();
+    }
+    
+    // Draw blocks
+    for (const b of editorLevel.blocks) {
+        const bx = (b.x - editorScrollX) * cs;
+        const by = b.y * cs;
+        if (bx > editorCanvas.width || bx + cs < 0) continue;
+        
+        if (b.type === 'block') {
+            c.fillStyle = '#1a1a3e';
+            c.fillRect(bx + 1, by + 1, cs - 2, cs - 2);
+            c.strokeStyle = '#00f0ff';
+            c.lineWidth = 1;
+            c.strokeRect(bx + 1, by + 1, cs - 2, cs - 2);
+        } else if (b.type.startsWith('spike')) {
+            c.fillStyle = '#ff3a5c';
+            c.beginPath();
+            if (b.type === 'spike_up') {
+                c.moveTo(bx + cs/2, by + cs - 2);
+                c.lineTo(bx + 3, by + 3);
+                c.lineTo(bx + cs - 3, by + 3);
+            } else if (b.type === 'spike_down') {
+                c.moveTo(bx + cs/2, by + 2);
+                c.lineTo(bx + 3, by + cs - 3);
+                c.lineTo(bx + cs - 3, by + cs - 3);
+            } else if (b.type === 'spike_left') {
+                c.moveTo(bx + cs - 2, by + cs/2);
+                c.lineTo(bx + 3, by + 3);
+                c.lineTo(bx + 3, by + cs - 3);
+            } else if (b.type === 'spike_right') {
+                c.moveTo(bx + 2, by + cs/2);
+                c.lineTo(bx + cs - 3, by + 3);
+                c.lineTo(bx + cs - 3, by + cs - 3);
+            }
+            c.closePath();
+            c.fill();
+        }
+    }
+    
+    // Spawn indicator
+    const spawnX = (2 - editorScrollX) * cs;
+    if (spawnX > 0 && spawnX < editorCanvas.width) {
+        c.fillStyle = 'rgba(0,255,136,0.3)';
+        c.fillRect(spawnX, cs, cs, editorCanvas.height - cs*2);
+        c.fillStyle = '#00ff88';
+        c.font = '10px sans-serif';
+        c.fillText('SPAWN', spawnX + 2, cs + 12);
+    }
+    
+    renderEditorToolbar();
+}
+
+function editorScroll(dir) {
+    editorScrollX = Math.max(0, Math.min(editorLevel.gridW - 10, editorScrollX + dir * 5));
+    drawEditor();
+}
+
+function editorExtend() {
+    // Extend floor/ceiling
+    const oldW = editorLevel.gridW;
+    editorLevel.gridW += 10;
+    for (let x = oldW; x < editorLevel.gridW; x++) {
+        editorLevel.blocks.push({x:x, y:0, w:1, h:1, type:'block'});
+        editorLevel.blocks.push({x:x, y:editorLevel.gridH-1, w:1, h:1, type:'block'});
+    }
+    drawEditor();
+    showToast('Extended to ' + editorLevel.gridW + ' blocks');
+}
+
+function saveEditorLevel() {
+    save.customLevels[editorIndex] = JSON.parse(JSON.stringify(editorLevel));
+    saveToDisk();
+    showToast('Level saved!');
+}
+
+function deleteEditorLevel() {
+    if (confirm('Delete "' + editorLevel.name + '"?')) {
+        save.customLevels.splice(editorIndex, 1);
+        saveToDisk();
+        exitEditor();
+        showToast('Level deleted');
+    }
+}
+
+function exitEditor() {
+    editorLevel = null;
+    editorIndex = -1;
+    showScreen('editorList');
+}
+
+function testEditorLevel() {
+    // Save first
+    save.customLevels[editorIndex] = JSON.parse(JSON.stringify(editorLevel));
+    saveToDisk();
+    
+    const testLvl = {
+        ...editorLevel,
+        id: 'test_' + editorIndex,
+        difficulty: 'Custom'
+    };
+    
+    gameState = 'testing';
+    currentLevel = testLvl;
+    currentLevelIndex = -1;
+    gameMode = 'level';
+    levelBlocks = parseLevelBlocks(testLvl);
+    levelLength = testLvl.gridW * BLOCK;
+    cameraX = 0;
+    resetPlayer();
+    player.y = H / 2;
+    
+    hideAllOverlays();
+    document.querySelectorAll('.overlay').forEach(o => o.classList.remove('active'));
+    showHUD();
+    gameState = 'playing';
+    updateMobileBtn();
+    particles = [];
+    lastTime = performance.now();
+}
+
+// ===== AUDIO (simple synthesized sounds) =====
+let audioCtx = null;
+function initAudio() {
+    try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch(e) {}
+}
+
+function playSound(freq, dur, type, vol) {
+    if (!audioCtx) return;
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type || 'square';
+        osc.frequency.value = freq;
+        gain.gain.value = vol || 0.1;
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + dur);
+    } catch(e) {}
+}
+
+function playDeathSound() { playSound(150, 0.3, 'sawtooth', 0.15); }
+function playCompleteSound() {
+    playSound(523, 0.15, 'square', 0.1);
+    setTimeout(() => playSound(659, 0.15, 'square', 0.1), 100);
+    setTimeout(() => playSound(784, 0.3, 'square', 0.1), 200);
+}
+function playClickSound() { playSound(800, 0.05, 'square', 0.05); }
+
+// Hook sounds into game events
+const origShowDeath = showDeath;
+showDeath = function(info) {
+    playDeathSound();
+    origShowDeath(info);
+};
+
+const origShowComplete = showComplete;
+showComplete = function(coins, stars) {
+    playCompleteSound();
+    origShowComplete(coins, stars);
+};
+
+// Add click sounds to buttons
+document.addEventListener('click', e => {
+    if (e.target.classList.contains('btn') || e.target.classList.contains('shop-item') || 
+        e.target.classList.contains('level-card') || e.target.classList.contains('editor-tool')) {
+        playClickSound();
+    }
+});
+
+// ===== FIRST-TIME UNLOCK DEFAULT ITEMS =====
+if (!save.unlockedSkins.includes('default')) save.unlockedSkins.push('default');
+if (!save.unlockedTrails.includes('default')) save.unlockedTrails.push('default');
+saveToDisk();
+
+// ===== LOAD CUSTOM SKIN IF EXISTS =====
+loadCustomSkinImage();
+
+// ===== VISIBILITY CHANGE (auto-pause) =====
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden && gameState === 'playing') {
+        togglePause();
+    }
+});
+
+// ===== WINDOW FOCUS (init audio on first interaction) =====
+document.addEventListener('click', function initAudioOnce() {
+    initAudio();
+    document.removeEventListener('click', initAudioOnce);
+}, { once: true });
+
+document.addEventListener('touchstart', function initAudioOnce() {
+    initAudio();
+    document.removeEventListener('touchstart', initAudioOnce);
+}, { once: true });
+
+// ===== PREVENT SCROLLING ON MOBILE =====
+document.body.addEventListener('touchmove', e => {
+    if (gameState === 'playing') e.preventDefault();
+}, { passive: false });
+
+// ===== VERSION DISPLAY =====
+// Add version to menu subtitle
+(function() {
+    const sub = document.querySelector('.menu-subtitle');
+    if (sub) sub.innerHTML = 'by BufferClick &nbsp;|&nbsp; v1.0 &nbsp;|&nbsp; Open Source';
+})();
+
+// ===== RESPONSIVE EDITOR RESIZE =====
+window.addEventListener('resize', () => {
+    if (currentScreen === 'editorScreen' && editorLevel) {
+        setupEditorCanvas();
+        drawEditor();
+    }
+});
+
+// ===== INITIALIZE AND START =====
+fpsTime = performance.now();
+lastTime = performance.now();
+requestAnimationFrame(gameLoop);
+
+// Show menu
+showScreen('menuScreen');
+
+console.log('%c Buffer Waves v1.0 %c by BufferClick ', 
+    'background:#00f0ff;color:#000;font-weight:bold;font-size:14px;padding:4px 8px;border-radius:4px 0 0 4px;',
+    'background:#ff00e6;color:#fff;font-weight:bold;font-size:14px;padding:4px 8px;border-radius:0 4px 4px 0;');
+console.log('Open Source | github.com/bufferclick');
+
+</script>
+</body>
+</html>
